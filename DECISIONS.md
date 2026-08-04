@@ -129,3 +129,62 @@ a costly retrofit of the twin/analytics/agent layers later if privacy
 requirements would otherwise have leaked into them. Actual legal/compliance
 review is deferred to M9 when a real data source and deployment context are
 known — this ADR sets engineering posture, not a compliance sign-off.
+
+---
+
+## ADR-008: Public dataset combination for M1 (grounding "synthetic-first" in real data)
+
+**Context:** ADR-002 committed to starting on synthetic data, but the
+synthetic generators need to model *realistic* distributions and the twin
+engine's update logic needs to be validated against something real, not just
+internally-consistent fake data. A systematic search compared 27 public
+datasets (full research in [docs/DATASETS.md](docs/DATASETS.md)) across
+academic performance, engagement/affect, environmental/occupancy, and
+attendance/anomaly categories, scored on suitability, AI usefulness, ease of
+implementation, data quality, public availability, documentation, and
+internship-timeline feasibility.
+
+**Decision:** adopt this dataset combination, each covering distinct project
+objectives with no redundant overlap:
+
+- **OULAD** (Open University Learning Analytics Dataset) as the spine —
+  performance, engagement (VLE clicks), dropout, resource/VLE utilization.
+- **UCI "Predict Students' Dropout and Academic Success"** — dropout
+  refinement with socioeconomic/macro features.
+- **xAPI-Edu-Data** — fine-grained behavioral engagement features.
+- **ASSISTments 2009–2010 (corrected file)** — knowledge tracing /
+  recommendation-system objective.
+- **UCI Occupancy Detection Data Set** — clean supervised benchmark for the
+  occupancy/environmental classification methodology.
+- **Spanish Classroom CO2 dataset (Zenodo)** — real classroom-sourced
+  environmental sensor data to apply that methodology to.
+- **NYC DOE Daily Attendance** (via Kaggle mirror) — attendance forecasting.
+- **Numenta Anomaly Benchmark (NAB)** — anomaly-detection algorithm
+  validation, decoupled from whichever sensor stream it's later pointed at.
+
+Optional stretch (not required for the core system): **Building Data Genome
+Project 2** for a larger-scale resource/energy-utilization module.
+
+Explicitly rejected for the core project, with reasons logged in
+docs/DATASETS.md: DAiSEE and both IEEE Dataport candidates (access friction —
+15GB data-use agreement / paywall — disproportionate to an internship
+timeline), KDD Cup 2015/XuetangX (official access is broken — dead domain,
+invite-only mirror), several Kaggle "toy"/synthetic datasets (fine as demos,
+not as a system backbone), and OECD PISA (rigorous but not classroom/
+time-series data, heavy SAS/SPSS format overhead for what it would add).
+
+**Consequences:** every dataset in the combination has a verified,
+currently-working, no-registration download and an unambiguous permissive
+license (CC BY 4.0 dominant, MIT for NAB) — no milestone depends on an
+access-gated or provenance-uncertain source. The combination mixes real
+institutional data with real classroom-specific sensor data rather than
+leaning entirely on generic-building stand-ins. It maps directly onto
+existing module boundaries (`twin_engine/`, `analytics/`, `agents/tools.py`)
+so M1–M5 in PROJECT_PLAN.md can each target a specific dataset rather than
+inventing schemas speculatively. Risk: OULAD's UK distance-learning context
+and the Spanish CO2 dataset's narrow COVID-reopening window are both
+real-but-imperfect proxies for a "typical" physical classroom — this is an
+accepted tradeoff given no perfect classroom-native, freely-licensed,
+digital-twin-specific dataset was found (see docs/DATASETS.md's negative
+finding). Synthetic generators (ADR-002) should be tuned to approximate the
+real distributions observed in this combination, not invented from scratch.

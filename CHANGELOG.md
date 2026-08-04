@@ -10,6 +10,10 @@ once a first release is tagged.
 
 ### Added
 
+- `docs/DATASETS.md`: research and comparison of 27 public datasets against
+  the project's 8 objectives, with a scored ranking table and a recommended
+  dataset combination (OULAD as spine + 7 targeted supplements).
+- DECISIONS.md ADR-008 recording the dataset combination decision.
 - Initial project scaffolding: directory structure for `src/digital_twin/`
   (api, core, domain, twin_engine, analytics, agents, data, schemas), tests,
   notebooks, scripts, docs, data folders.
