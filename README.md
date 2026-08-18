@@ -35,8 +35,11 @@ into a classroom-level view. The system uses that state to:
 │  Twin  │  │Analytics │   │   Agents   │   │  Data Layer       │
 │ Engine │  │ Engine   │   │ (LLM, via  │   │  domain models,   │
 │ (state │  │(descrip- │   │  Claude)   │   │  db + repos,      │
-│ update │  │tive/pre- │   │  tutor +   │   │  synthetic        │
-│ logic) │  │dictive)  │   │  decision- │   │  generators,      │
+│ update │  │tive/pre- │   │  tutor +   │   │  Public datasets
+                                               LMS adapters
+                                               Sensor adapters
+                                               Repositories     │
+│ logic) │  │dictive)  │   │  decision- │   │,                  │
 │        │  │          │   │  support)  │   │  source adapters  │
 └────┬───┘  └────┬─────┘   └─────┬──────┘   └──────────────────┘
      └────────────┴───────────────┴─────────► via repositories
@@ -46,10 +49,7 @@ This is a **modular monolith**: one deployable Python service with strict intern
 module boundaries, rather than separate microservices. It can be split into
 services later if scale requires it — see [DECISIONS.md](DECISIONS.md) (ADR-001).
 
-**Data strategy is hybrid**: development starts on synthetic data
-(`src/digital_twin/data/generators/`), while `src/digital_twin/data/adapters/`
-defines the interface real LMS/sensor sources will implement later, without
-requiring changes to the twin engine, analytics, or agents (ADR-002).
+**Data strategy**:The system is built using publicly available educational, attendance, and classroom datasets. The architecture abstracts data access through adapters and repositories so that real LMS or IoT classroom data can be integrated in the future without modifying the core Digital Twin engine.
 
 **AI approach**: classical ML (scikit-learn) for analytics/prediction, and
 LLM agents (Anthropic Claude) for tutoring dialogue and decision-support
@@ -90,7 +90,6 @@ See [CLAUDE.md](CLAUDE.md) for detailed module boundaries and conventions.
 - **Persistence**: PostgreSQL via SQLAlchemy 2.x + Alembic migrations
 - **Analytics/ML**: pandas, numpy, scikit-learn
 - **LLM agents**: Anthropic SDK (Claude)
-- **Synthetic data**: Faker
 - **Testing**: pytest, pytest-asyncio, pytest-cov
 - **Quality**: ruff (lint), black (format), mypy (types)
 
@@ -127,8 +126,4 @@ uvicorn digital_twin.main:app --reload --app-dir src
 - [CHANGELOG.md](CHANGELOG.md) — release history
 
 ## Privacy note
-
-Even though development starts on synthetic data, the data layer is designed
-so real student data can be plugged in later without redesigning the twin,
-analytics, or agent layers — see ADR-002 and ADR-007 in DECISIONS.md for the
-compliance posture (FERPA/GDPR) this implies once real data is connected.
+The system is designed around a data abstraction layer that currently uses publicly available datasets. The same architecture allows future integration with real classroom or Learning Management System (LMS) data while preserving the separation between data acquisition, analytics, and the Digital Twin engine.

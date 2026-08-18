@@ -188,3 +188,47 @@ accepted tradeoff given no perfect classroom-native, freely-licensed,
 digital-twin-specific dataset was found (see docs/DATASETS.md's negative
 finding). Synthetic generators (ADR-002) should be tuned to approximate the
 real distributions observed in this combination, not invented from scratch.
+
+---
+
+## ADR-009: Random forest as the selected dropout-risk model, over logistic regression
+
+**Context:** the OULAD dropout-risk baseline (logistic regression,
+`class_weight="balanced"`, day-30 leakage-safe cutoff — see
+docs/datasets/dropout-prediction-feature-design.md) was the first, explicitly
+interpretable model for this task. The next step was to check whether a
+stronger model improves on it on the *same* feature matrix and splits,
+without touching the feature design, cutoff, or Student Twin.
+
+**Decision:** add `train_random_forest_model` to `analytics/predictive.py`
+alongside the existing `train_baseline_model`, sharing the same
+preprocessing pipeline, `class_weight="balanced"`, and train/val/test split.
+An unconstrained `RandomForestClassifier` overfits hard (train ROC-AUC
+~1.0, validation ROC-AUC ~0.68) and underperforms logistic regression on
+recall — the metric that matters most for an early-warning system, since a
+missed at-risk student is costlier than a false alarm. `max_depth=8` and
+`min_samples_leaf=10` were selected by comparing a small grid of
+depth/leaf-size combinations on the validation split's recall/precision/F1/
+ROC-AUC (the same evaluation this module already reports), not tuned
+against the test set. With that regularization, random forest improves on
+logistic regression on every test-set metric except accuracy, which is
+statistically flat: recall 0.604 vs. 0.572, precision 0.270 vs. 0.265, F1
+0.373 vs. 0.362, ROC-AUC 0.665 vs. 0.644, accuracy 0.628 vs. 0.630.
+XGBoost/LightGBM were considered (per the task's own preference) but not
+added — neither is a `pyproject.toml` dependency, and scikit-learn's own
+ensemble already answers the "does a non-linear model help" question
+without a new dependency.
+
+**Consequences:** random forest is now the model `scripts/train_dropout_baseline.py`
+would recommend for the early-warning use case; logistic regression remains
+in the module (`train_baseline_model`) as the interpretable baseline both
+models are compared against, not removed. `DropoutPrediction`'s output
+shape (`dropout_probability`, `predicted_class`) is unchanged, so nothing
+downstream needs updating if/when a caller switches which trained pipeline
+it passes to `predict()`. Both models still show absolute recall/precision
+in the 0.27–0.60 range — day-30, demographic + early-behavioral-only
+features are inherently limited signal this early in a 234–269 day course;
+neither model is production-ready as-is, and the next real lever is
+feature richness (e.g. `code_module`/`code_presentation`, already flagged
+as a follow-up in dropout-prediction-feature-design.md), not further model
+swapping.

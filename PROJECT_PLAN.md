@@ -45,7 +45,7 @@ downstream to develop against.
   method), `twin_engine/classroom_twin.py` (aggregation), at least one working
   `update_strategies.py` implementation (e.g., a simple Bayesian knowledge
   tracing or IRT-style update).
-- Exit criteria: feeding a sequence of synthetic interactions/assessments
+- Exit criteria: feeding a chronological sequence of  interactions/assessments through the twin produces a knowledge-state trajectory that responds sensibly to correct/incorrect performance, validated with unit tests and real ASSISTments data.
   through the twin produces a knowledge-state trajectory that responds
   sensibly to correct/incorrect performance (validated with unit tests, not
   just eyeballing).
