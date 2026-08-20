@@ -9,7 +9,11 @@ import pytest
 from digital_twin.analytics.bkt_calibration import (
     BktParameters,
     evaluate_bkt,
+    evaluate_bkt_identified,
+    evaluate_constant_probability_baseline,
+    evaluate_persistence_baseline,
     fit_bkt_em,
+    fit_empirical_rate,
     flatten_sequences,
     split_student_ids,
 )
@@ -72,6 +76,101 @@ def test_evaluate_bkt_reports_valid_metrics() -> None:
     assert result.n_predictions == sum(len(s) for s in sequences)
     assert result.log_loss > 0.0
     assert 0.0 <= result.accuracy <= 1.0
+    assert result.rmse > 0.0
+    assert result.brier_score > 0.0
+    assert result.rmse == pytest.approx(result.brier_score**0.5)
+    assert result.n_students is None
+    assert result.n_skills is None
+    if result.auc is not None:
+        assert 0.0 <= result.auc <= 1.0
+
+
+def test_evaluate_bkt_raises_on_no_predictions() -> None:
+    params = BktParameters(prior_mastery=0.3, p_transit=0.2, p_slip=0.1, p_guess=0.25)
+    with pytest.raises(ValueError, match="at least one prediction"):
+        evaluate_bkt(params, [])
+    with pytest.raises(ValueError, match="at least one prediction"):
+        evaluate_bkt(params, [[]])
+
+
+def test_evaluate_bkt_identified_counts_distinct_students_and_skills() -> None:
+    params = BktParameters(prior_mastery=0.3, p_transit=0.2, p_slip=0.1, p_guess=0.25)
+    sequences_by_student = {
+        1: {"skill-a": [True, False, True], "skill-b": [False, False]},
+        2: {"skill-a": [True, True, False]},
+    }
+
+    result = evaluate_bkt_identified(params, sequences_by_student)
+
+    assert result.n_students == 2
+    assert result.n_skills == 2
+    assert result.n_sequences == 3
+    assert result.n_predictions == 3 + 2 + 3
+
+
+def test_evaluate_bkt_identified_matches_evaluate_bkt_on_same_sequences() -> None:
+    """Identity bookkeeping shouldn't change the underlying predictions/metrics."""
+    params = BktParameters(prior_mastery=0.3, p_transit=0.2, p_slip=0.1, p_guess=0.25)
+    sequences_by_student = {
+        1: {"skill-a": [True, False, True]},
+        2: {"skill-a": [False, True, True, False]},
+    }
+    flat = flatten_sequences(sequences_by_student)
+
+    identified_result = evaluate_bkt_identified(params, sequences_by_student)
+    flat_result = evaluate_bkt(params, flat)
+
+    assert identified_result.n_predictions == flat_result.n_predictions
+    assert identified_result.log_loss == pytest.approx(flat_result.log_loss)
+    assert identified_result.rmse == pytest.approx(flat_result.rmse)
+
+
+def test_fit_empirical_rate_matches_manual_proportion() -> None:
+    sequences = [[True, True, False], [False, True]]
+    assert fit_empirical_rate(sequences) == pytest.approx(3 / 5)
+
+
+def test_fit_empirical_rate_raises_on_no_outcomes() -> None:
+    with pytest.raises(ValueError, match="non-empty sequence"):
+        fit_empirical_rate([])
+    with pytest.raises(ValueError, match="non-empty sequence"):
+        fit_empirical_rate([[]])
+
+
+def test_evaluate_constant_probability_baseline_predicts_fixed_rate() -> None:
+    sequences = [[True, False, True], [True, True]]
+    result = evaluate_constant_probability_baseline(0.6, sequences)
+
+    assert result.n_predictions == 5
+    assert result.n_sequences == 2
+    expected_brier = sum((label - 0.6) ** 2 for label in (1, 0, 1, 1, 1)) / 5
+    assert result.brier_score == pytest.approx(expected_brier)
+
+
+def test_evaluate_persistence_baseline_predicts_previous_outcome() -> None:
+    sequences = [[True, True, False]]
+    result = evaluate_persistence_baseline(sequences, first_attempt_probability=0.5)
+
+    assert result.n_predictions == 3
+    assert result.n_sequences == 1
+    # first attempt predicted 0.5 (correct=True -> squared error 0.25),
+    # second predicted 1.0 from the first's outcome (correct=True -> 0.0),
+    # third predicted 1.0 from the second's outcome (correct=False -> 1.0).
+    expected_brier = (0.25 + 0.0 + 1.0) / 3
+    assert result.brier_score == pytest.approx(expected_brier)
+
+
+def test_bkt_beats_naive_baselines_on_structured_synthetic_data() -> None:
+    """A real BKT signal (mastery grows) should out-predict a stateless baseline."""
+    sequences = _synthetic_sequences(1500, l0=0.15, transit=0.4, slip=0.05, guess=0.15, seed=7)
+    params = BktParameters(prior_mastery=0.15, p_transit=0.4, p_slip=0.05, p_guess=0.15)
+
+    bkt_result = evaluate_bkt(params, sequences)
+    rate = fit_empirical_rate(sequences)
+    baseline_result = evaluate_constant_probability_baseline(rate, sequences)
+
+    assert bkt_result.log_loss < baseline_result.log_loss
+    assert bkt_result.brier_score < baseline_result.brier_score
 
 
 def test_evaluate_bkt_prefers_correctly_specified_parameters() -> None:

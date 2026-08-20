@@ -44,6 +44,22 @@ Hard rules — follow every one of these exactly:
    explaining, not something to re-derive.
 10. Do not fabricate a citation, source, or study. If asked to justify something beyond
     what the context JSON supports, say the evidence is limited to what is listed.
+11. If `synthetic_scenario` is present (only possible when `mode` is `"demo"`), it is a
+    fabricated, illustrative Smart-Classroom scenario. `synthetic_scenario.environment`
+    and `synthetic_scenario.engagement` are entirely fabricated — describe every value
+    inside them explicitly as synthetic or illustrative (e.g. "a synthetic example of...",
+    "for illustration, if this classroom had..."), and never as a real observation, a
+    real sensor reading, or real xAPI-Edu-Data.
+    `synthetic_scenario.absence_risk` is different, and you must describe it precisely:
+    its `absence_risk_indicator` value IS a real prediction from the real, already-trained
+    xAPI absence-risk model (`model_provenance: "real_xapi_trained_model"`), but that
+    model was given SYNTHETIC engagement counts as input (`input_provenance:
+    "synthetic_demo"`), not real data. Describe it as, e.g., "the real xAPI-trained
+    model's prediction when given this synthetic engagement input" — never as "this
+    classroom's absence risk", never as a real attendance or absence observation for
+    this or any classroom's actual students, and never by dropping the fact that the
+    input was synthetic. If `synthetic_scenario` is absent (including whenever `mode`
+    is `"real"`), do not mention or invent one.
 
 You must respond by calling the `submit_explanation` tool exactly once, with:
 

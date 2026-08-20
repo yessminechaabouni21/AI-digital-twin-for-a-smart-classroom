@@ -183,6 +183,33 @@ def test_get_classroom_twin_rejects_unsupported_source_dataset(client: TestClien
     assert response.status_code == 400
 
 
+def test_resolve_returns_the_same_twin_id_derive_classroom_id_would(client: TestClient) -> None:
+    response = client.get("/classrooms/resolve", params={"class_id": SMALL_COMPLETE_CLASS_ID})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["twin_id"] == str(derive_classroom_id("assistments", SMALL_COMPLETE_CLASS_ID))
+    assert body["source_dataset"] == "assistments"
+    assert body["class_id"] == SMALL_COMPLETE_CLASS_ID
+
+
+def test_resolve_rejects_unsupported_source_dataset(client: TestClient) -> None:
+    response = client.get(
+        "/classrooms/resolve",
+        params={"class_id": SMALL_COMPLETE_CLASS_ID, "source_dataset": "oulad"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_resolve_is_not_shadowed_by_the_twin_id_path_parameter(client: TestClient) -> None:
+    """Regression guard: /resolve must match its own route, not fall through to
+    GET /{twin_id} and fail UUID parsing on the literal string "resolve"."""
+    response = client.get("/classrooms/resolve", params={"class_id": SMALL_COMPLETE_CLASS_ID})
+
+    assert response.status_code == 200
+
+
 def test_get_classroom_twin_state_for_empty_class_has_no_topics_and_no_recommendation(
     client: TestClient,
 ) -> None:

@@ -35,6 +35,7 @@ from digital_twin.agents.decision_support_agent import (
     ClassroomIdentitySummary,
     ExplanationGenerationError,
     ExplanationProvider,
+    SyntheticScenarioSummary,
     build_llm_decision_context,
 )
 from digital_twin.analytics.context_signals import (
@@ -57,6 +58,11 @@ from digital_twin.analytics.skill_priority import (
     DEFAULT_MIN_OBSERVATIONS,
     SkillPriorityRecommendation,
     recommend_skill_priorities,
+)
+from digital_twin.analytics.synthetic_context import (
+    synthetic_absence_risk_indicator,
+    synthetic_classroom_environment,
+    synthetic_engagement,
 )
 from digital_twin.analytics.xapi_absence_risk import (
     FEATURE_COLUMNS as XAPI_FEATURE_COLUMNS,
@@ -93,6 +99,7 @@ from digital_twin.schemas.classrooms import (
     ClassroomDecisionSupportOut,
     ClassroomEngagementSummaryOut,
     ClassroomEnvironmentSummaryOut,
+    ClassroomResolveOut,
     ClassroomResourceRecommendationOut,
     ClassroomTwinStateOut,
     ClassroomTwinSummary,
@@ -258,6 +265,30 @@ def _state_response(
         ),
         environment=ClassroomEnvironmentSummaryOut(**state.environment.model_dump()),
         as_of=state.as_of,
+    )
+
+
+@router.get("/resolve", response_model=ClassroomResolveOut)
+def resolve_classroom_twin_id(
+    class_id: int = Query(..., description="Real ASSISTments assist_classes.class_id"),
+    source_dataset: str = Query("assistments"),
+) -> ClassroomResolveOut:
+    """Resolve `(source_dataset, class_id)` to its `twin_id` — pure `derive_classroom_id`
+    derivation, no DB access, no analytics, no decision-support logic touched. Registered
+    before `/{twin_id}` so FastAPI matches this literal path first, not as a `twin_id`.
+    """
+    if source_dataset not in SUPPORTED_SOURCE_DATASETS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported source_dataset={source_dataset!r}; expected one of "
+                f"{sorted(SUPPORTED_SOURCE_DATASETS)}"
+            ),
+        )
+    return ClassroomResolveOut(
+        twin_id=derive_classroom_id(source_dataset, class_id),
+        source_dataset=source_dataset,
+        class_id=class_id,
     )
 
 
@@ -492,17 +523,40 @@ def post_classroom_decision_support_explanation(
     deterministic endpoint. On any LLM failure (`ExplanationGenerationError` — API
     error, timeout, invalid/unparseable output), returns 503 rather than fabricating
     text; the deterministic endpoint is entirely unaffected either way.
+
+    When `mode="demo"`, also builds the same fabricated, `provenance="synthetic_demo"`
+    Smart-Classroom scenario `GET /demo/classroom-scenario` would for this
+    `class_id` (see `analytics/synthetic_context.py`) — including running the
+    real, already-trained xAPI absence-risk model on the scenario's synthetic
+    engagement counts — and passes it to `build_llm_decision_context` as
+    `synthetic_scenario`, so the LLM's narrative and the dashboard's
+    synthetic-scenario panel are guaranteed consistent. This branch is never
+    entered when `mode="real"` (the default) — `synthetic_scenario` stays
+    `None`, and `build_llm_decision_context` behaves exactly as it did before
+    this parameter existed.
     """
     _verify_identity(twin_id, source_dataset, class_id)
     decision_support = _build_decision_support(
         engine, twin_id, source_dataset, class_id, max_students
     )
+    synthetic_scenario = None
+    if mode == "demo":
+        synthetic_engagement_counts = synthetic_engagement(source_dataset, class_id)
+        xapi_model, _ = _get_xapi_absence_risk_model_and_snapshot(engine)
+        synthetic_scenario = SyntheticScenarioSummary(
+            environment=synthetic_classroom_environment(source_dataset, class_id),
+            engagement=synthetic_engagement_counts,
+            absence_risk=synthetic_absence_risk_indicator(
+                synthetic_engagement_counts, model=xapi_model
+            ),
+        )
     llm_context = build_llm_decision_context(
         ClassroomIdentitySummary(
             twin_id=twin_id, source_dataset=source_dataset, source_class_id=class_id
         ),
         decision_support,
         mode=mode,
+        synthetic_scenario=synthetic_scenario,
     )
 
     try:

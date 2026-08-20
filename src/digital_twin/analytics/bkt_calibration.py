@@ -21,7 +21,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-from sklearn.metrics import log_loss
+from sklearn.metrics import log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from digital_twin.domain.interaction import Interaction, InteractionType
@@ -41,12 +41,26 @@ class BktParameters(BaseModel):
 
 
 class BktEvaluationResult(BaseModel):
-    """Held-out one-step-ahead response-prediction quality for one parameter set."""
+    """Held-out one-step-ahead response-prediction quality for one parameter set.
+
+    `n_students`/`n_skills` are `None` for callers that only have anonymous
+    `Sequence[Sequence[bool]]` chains (`evaluate_bkt`, the baselines below) —
+    (student, topic) identity isn't available to count distinct students/skills
+    from. `evaluate_bkt_identified` populates them from real ASSISTments
+    (student_id, topic_id) pairs. `auc` is `None` when a split has only one
+    outcome class (all-correct or all-incorrect) — ROC AUC is undefined there,
+    so it's omitted rather than reported as a meaningless value.
+    """
 
     n_predictions: int
     n_sequences: int
+    n_students: int | None = None
+    n_skills: int | None = None
     log_loss: float
     accuracy: float
+    rmse: float
+    brier_score: float
+    auc: float | None = None
 
 
 def flatten_sequences(sequences_by_student: dict[int, dict[str, list[bool]]]) -> list[list[bool]]:
@@ -216,16 +230,102 @@ def predict_correct_probability(mastery: float, p_slip: float, p_guess: float) -
     return mastery * (1.0 - p_slip) + (1.0 - mastery) * p_guess
 
 
+_BASE_TIME = datetime(2000, 1, 1, tzinfo=UTC)
+
+
+def _one_step_predictions(
+    strategy: BayesianKnowledgeTracingStrategy, obs: Sequence[bool], topic_id: str
+) -> tuple[list[int], list[float]]:
+    """Walk one chronological (student, topic) chain, predicting each attempt before observing it.
+
+    Mirrors the production update path exactly: `mastery_before` is the
+    prior's own `prior_mastery` for the first attempt, or the previous
+    attempt's *post-update* posterior otherwise — never anything derived
+    from the current attempt's own outcome. The outcome is only consumed
+    afterwards, via `strategy.update`, to produce the state the *next*
+    attempt in this same chain predicts from.
+    """
+    y_true: list[int] = []
+    y_pred: list[float] = []
+    student_id = uuid4()
+    previous: KnowledgeState | None = None
+    for t, correct in enumerate(obs):
+        mastery_before = (
+            previous.mastery_probability if previous is not None else strategy.prior_mastery
+        )
+        y_true.append(1 if correct else 0)
+        y_pred.append(
+            predict_correct_probability(mastery_before, strategy.p_slip, strategy.p_guess)
+        )
+
+        interaction = Interaction(
+            student_id=student_id,
+            occurred_at=_BASE_TIME + timedelta(seconds=t),
+            interaction_type=InteractionType.PROBLEM_ATTEMPT,
+            topic_id=topic_id,
+            outcome=correct,
+        )
+        previous = strategy.update(previous, interaction)
+    return y_true, y_pred
+
+
+def _finalize_result(
+    y_true: Sequence[int],
+    y_pred: Sequence[float],
+    *,
+    n_sequences: int,
+    n_students: int | None = None,
+    n_skills: int | None = None,
+) -> BktEvaluationResult:
+    """Compute BCE/log-loss, RMSE, Brier score, accuracy, and (if defined) AUC.
+
+    `y_pred` is clipped away from exactly 0/1 before log_loss (undefined at
+    the boundary); RMSE/Brier/accuracy/AUC use the unclipped predictions,
+    since only log-loss blows up at the boundary. AUC is only computed when
+    both outcome classes are present in `y_true` — with a single class, ROC
+    AUC has no meaningful value (scikit-learn would raise), so it's reported
+    as `None` rather than a placeholder number.
+    """
+    if not y_true:
+        raise ValueError("evaluation requires at least one prediction")
+
+    clipped = [min(1.0 - 1e-9, max(1e-9, p)) for p in y_pred]
+    predicted_labels = [1 if p >= 0.5 else 0 for p in y_pred]
+    accuracy = sum(1 for t, p in zip(y_true, predicted_labels, strict=True) if t == p) / len(y_true)
+    squared_errors = [(t - p) ** 2 for t, p in zip(y_true, y_pred, strict=True)]
+    brier = sum(squared_errors) / len(squared_errors)
+
+    auc: float | None = None
+    if len(set(y_true)) > 1:
+        auc = float(roc_auc_score(y_true, y_pred))
+
+    return BktEvaluationResult(
+        n_predictions=len(y_true),
+        n_sequences=n_sequences,
+        n_students=n_students,
+        n_skills=n_skills,
+        log_loss=log_loss(y_true, clipped, labels=[0, 1]),
+        accuracy=accuracy,
+        rmse=brier**0.5,
+        brier_score=brier,
+        auc=auc,
+    )
+
+
 def evaluate_bkt(
     parameters: BktParameters, sequences: Sequence[Sequence[bool]]
 ) -> BktEvaluationResult:
-    """Score one-step-ahead response prediction on held-out sequences.
+    """Score one-step-ahead response prediction on held-out, anonymous sequences.
 
     For every attempt, predicts P(correct) from the mastery estimate
     available *before* that attempt (never from its own outcome), then
     feeds the actual outcome into `BayesianKnowledgeTracingStrategy.update`
     to get the mastery estimate for the next attempt in the same sequence —
     exactly the production update path, run against held-out data only.
+    `n_students`/`n_skills` are left `None`: plain `Sequence[Sequence[bool]]`
+    carries no (student, topic) identity to count. Use
+    `evaluate_bkt_identified` when that identity is available and those
+    counts are wanted.
     """
     strategy = BayesianKnowledgeTracingStrategy(
         prior_mastery=parameters.prior_mastery,
@@ -237,49 +337,136 @@ def evaluate_bkt(
     y_true: list[int] = []
     y_pred: list[float] = []
     n_sequences = 0
-    base_time = datetime(2000, 1, 1, tzinfo=UTC)
 
     for obs in sequences:
         if not obs:
             continue
         n_sequences += 1
-        student_id = uuid4()
-        previous: KnowledgeState | None = None
-        for t, correct in enumerate(obs):
-            mastery_before = (
-                previous.mastery_probability if previous is not None else strategy.prior_mastery
-            )
-            y_true.append(1 if correct else 0)
-            y_pred.append(
-                predict_correct_probability(mastery_before, strategy.p_slip, strategy.p_guess)
-            )
+        seq_true, seq_pred = _one_step_predictions(strategy, obs, "calibration")
+        y_true.extend(seq_true)
+        y_pred.extend(seq_pred)
 
-            interaction = Interaction(
-                student_id=student_id,
-                occurred_at=base_time + timedelta(seconds=t),
-                interaction_type=InteractionType.PROBLEM_ATTEMPT,
-                topic_id="calibration",
-                outcome=correct,
-            )
-            previous = strategy.update(previous, interaction)
+    return _finalize_result(y_true, y_pred, n_sequences=n_sequences)
 
-    clipped = [min(1.0 - 1e-9, max(1e-9, p)) for p in y_pred]
-    predicted_labels = [1 if p >= 0.5 else 0 for p in clipped]
-    accuracy = sum(1 for t, p in zip(y_true, predicted_labels, strict=True) if t == p) / len(y_true)
 
-    return BktEvaluationResult(
-        n_predictions=len(y_true),
-        n_sequences=n_sequences,
-        log_loss=log_loss(y_true, clipped, labels=[0, 1]),
-        accuracy=accuracy,
+def evaluate_bkt_identified(
+    parameters: BktParameters,
+    sequences_by_student: dict[int, dict[str, list[bool]]],
+) -> BktEvaluationResult:
+    """Like `evaluate_bkt`, but over `{student_id: {topic_id: [outcomes]}}`.
+
+    Same leakage-free one-step-ahead walk as `evaluate_bkt` (one independent
+    BKT chain per (student, topic) pair, predicted before each attempt's
+    outcome is fed into `strategy.update`), but keeps student/topic identity
+    so `n_students`/`n_skills` can be reported — the shape
+    `data.repositories.assistments_problem_attempts.fetch_assistments_attempt_sequences`
+    returns from real ASSISTments data.
+    """
+    strategy = BayesianKnowledgeTracingStrategy(
+        prior_mastery=parameters.prior_mastery,
+        p_transit=parameters.p_transit,
+        p_slip=parameters.p_slip,
+        p_guess=parameters.p_guess,
     )
+
+    y_true: list[int] = []
+    y_pred: list[float] = []
+    n_sequences = 0
+    students_seen: set[int] = set()
+    skills_seen: set[str] = set()
+
+    for student_id, by_topic in sequences_by_student.items():
+        for topic_id, obs in by_topic.items():
+            if not obs:
+                continue
+            n_sequences += 1
+            students_seen.add(student_id)
+            skills_seen.add(topic_id)
+            seq_true, seq_pred = _one_step_predictions(strategy, obs, topic_id)
+            y_true.extend(seq_true)
+            y_pred.extend(seq_pred)
+
+    return _finalize_result(
+        y_true,
+        y_pred,
+        n_sequences=n_sequences,
+        n_students=len(students_seen),
+        n_skills=len(skills_seen),
+    )
+
+
+def fit_empirical_rate(sequences: Sequence[Sequence[bool]]) -> float:
+    """Overall proportion of correct attempts across `sequences`.
+
+    The empirical-rate baseline's one parameter. Must be fit on the same
+    train split used to fit BKT's own parameters
+    (never on the sequences it's later evaluated against) — the same
+    leakage rule `fit_bkt_em` follows, so the baseline comparison is fair.
+    """
+    outcomes = [correct for obs in sequences for correct in obs]
+    if not outcomes:
+        raise ValueError("fit_empirical_rate requires at least one non-empty sequence")
+    return sum(1 for c in outcomes if c) / len(outcomes)
+
+
+def evaluate_constant_probability_baseline(
+    probability: float, sequences: Sequence[Sequence[bool]]
+) -> BktEvaluationResult:
+    """Score a baseline that always predicts a fixed `probability` (e.g. from `fit_empirical_rate`).
+
+    No per-attempt state at all — every prediction in every sequence is the
+    same constant — so this measures how much BKT's mastery tracking buys
+    over just knowing the base rate.
+    """
+    y_true: list[int] = []
+    y_pred: list[float] = []
+    n_sequences = 0
+    for obs in sequences:
+        if not obs:
+            continue
+        n_sequences += 1
+        for correct in obs:
+            y_true.append(1 if correct else 0)
+            y_pred.append(probability)
+    return _finalize_result(y_true, y_pred, n_sequences=n_sequences)
+
+
+def evaluate_persistence_baseline(
+    sequences: Sequence[Sequence[bool]], *, first_attempt_probability: float = 0.5
+) -> BktEvaluationResult:
+    """Score a "predict the previous attempt's outcome" baseline, chronologically per sequence.
+
+    For each (student, topic) chain: the first attempt is predicted with
+    `first_attempt_probability` (no history yet within this chain); every
+    later attempt is predicted with 1.0/0.0 matching whether the
+    *immediately preceding* attempt in the same chain was correct. Uses
+    only each sequence's own past, so it's leakage-free without needing any
+    train/test split of its own.
+    """
+    y_true: list[int] = []
+    y_pred: list[float] = []
+    n_sequences = 0
+    for obs in sequences:
+        if not obs:
+            continue
+        n_sequences += 1
+        previous_outcome = first_attempt_probability
+        for correct in obs:
+            y_true.append(1 if correct else 0)
+            y_pred.append(previous_outcome)
+            previous_outcome = 1.0 if correct else 0.0
+    return _finalize_result(y_true, y_pred, n_sequences=n_sequences)
 
 
 __all__ = [
     "BktEvaluationResult",
     "BktParameters",
     "evaluate_bkt",
+    "evaluate_bkt_identified",
+    "evaluate_constant_probability_baseline",
+    "evaluate_persistence_baseline",
     "fit_bkt_em",
+    "fit_empirical_rate",
     "flatten_sequences",
     "predict_correct_probability",
     "split_student_ids",

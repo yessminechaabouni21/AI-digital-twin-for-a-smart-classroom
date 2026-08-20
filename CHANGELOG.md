@@ -10,6 +10,36 @@ once a first release is tagged.
 
 ### Added
 
+- `GET /students/oulad-demo`: a Student Twin perspective built from real
+  OULAD assessment/dropout/performance data, independent of, and never
+  identity-linked to, any ASSISTments student or classroom. Dropout-risk
+  and pass-probability predictions are only ever returned when the
+  requested `(id_student, code_module, code_presentation)` falls in that
+  model's own genuine held-out test split (models trained once per
+  process and cached in `api/routers/students.py`, never retrained per
+  request); otherwise the response explains why the prediction was
+  withheld rather than serving an in-sample one. New
+  `schemas/students.py::OuladStudentDemoOut`. New
+  `data/repositories/assistments_problem_attempts.fetch_assistments_chronological_attempts`
+  (unrelated to the OULAD endpoint — added alongside it, preserves a
+  student's true cross-skill chronological attempt order for the
+  knowledge-tracing feature-engineering module, see below).
+- `analytics/knowledge_tracing_features.py` and
+  `analytics/knowledge_tracing_experiment.py` (new): the H1-H4
+  knowledge-tracing research experiment's leakage-free historical
+  features and train-fit/val/test orchestration (train-fitted BKT with
+  EM iterations selected on validation, BKT+features logistic regression,
+  historical-features gradient-boosted trees), plus
+  `scripts/run_kt_experiment.py`. Additive only — does not modify
+  `analytics/bkt_calibration.py`, `scripts/calibrate_bkt.py`, or any
+  previously reported BKT baseline/comparison numbers.
+- `dashboard/`: finalized as a coherent research/demo presentation of the
+  whole Digital Twin (Classroom Twin → Knowledge Tracing → Student Twin →
+  Smart Classroom → Research Evaluation → Benchmark Evidence →
+  architecture overview → optional LLM explanation), built around the
+  existing Classroom Twin decision-support panel, which is unchanged.
+  Smart Classroom demo values now carry one "DEMONSTRATION SCENARIO"
+  banner instead of a repeated "(synthetic)" suffix on every value.
 - Deterministic decision-support layer: `analytics/decision_support.py`
   (new) turns already-computed `skill_priority.recommend_skill_priorities`/
   `resource_recommendation.recommend_classroom_resource` output into a

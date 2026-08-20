@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Educational Digital Twin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Educational Digital Twin</h1>
+    <p class="subtitle">Student &amp; Classroom Learning Intelligence</p>
+  </header>
+
+  <main>
+    <section class="panel selector-panel">
+      <h2>Classroom</h2>
+      <form id="classroom-form" class="selector-form">
+        <label for="class-id-select">Known ASSISTments classes</label>
+        <select id="class-id-select">
+          <option value="1679">1679 — small, complete roster (5 students)</option>
+          <option value="27834">27834 — large, capped roster (148 eligible)</option>
+          <option value="2926">2926</option>
+          <option value="6277">6277</option>
+          <option value="12959">12959</option>
+          <option value="__custom__">Custom class_id…</option>
+        </select>
+
+        <label for="class-id-custom" id="custom-label" hidden>Custom class_id</label>
+        <input type="number" id="class-id-custom" min="1" placeholder="e.g. 4521" hidden />
+
+        <button type="submit" id="load-button">Load classroom</button>
+      </form>
+      <p id="selector-status" class="status" role="status"></p>
+
+      <label class="demo-toggle-label" for="demo-mode-toggle">
+        <input type="checkbox" id="demo-mode-toggle" />
+        Demo Mode — simulate this classroom with a synthetic Smart-Classroom scenario
+      </label>
+      <p class="muted">
+        Demo Mode fabricates illustrative sensor/engagement data for the classroom
+        selected above. It never changes, and is never merged into, that classroom's
+        real ASSISTments-based decision support below.
+      </p>
+    </section>
+
+    <!-- 1. CLASSROOM TWIN — existing deterministic decision support, unchanged. -->
+    <section class="panel" id="decision-support-panel" hidden>
+      <div class="section-kicker">Classroom Twin</div>
+      <h2>Deterministic decision support</h2>
+      <p class="source-line" id="ds-source-line"></p>
+
+      <div class="card">
+        <h3>Summary</h3>
+        <p id="ds-summary"></p>
+      </div>
+
+      <div class="card">
+        <h3>Priority skill</h3>
+        <p id="ds-priority-skill"></p>
+        <p id="ds-rationale" class="rationale"></p>
+      </div>
+
+      <div class="card">
+        <h3>Recommended resources</h3>
+        <table id="ds-resources-table">
+          <thead>
+            <tr>
+              <th>Problem ID</th>
+              <th>Historical mean correct</th>
+              <th>Recorded answers</th>
+            </tr>
+          </thead>
+          <tbody id="ds-resources-body"></tbody>
+        </table>
+        <p id="ds-resources-empty" class="muted" hidden>No ranked resource is currently available for this classroom.</p>
+      </div>
+
+      <div class="card">
+        <h3>Evidence</h3>
+        <ul id="ds-evidence"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Limitations</h3>
+        <ul id="ds-limitations"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Environmental / xAPI context</h3>
+        <div id="ds-context-available" hidden>
+          <p class="note note-info" id="ds-context-note"></p>
+          <ul id="ds-context-signals"></ul>
+        </div>
+        <p id="ds-context-unavailable" class="note note-warning">
+          No verified environmental or xAPI context is currently linked to this classroom
+          (no <code>classroom_context_mappings</code> entry exists). This is expected unless
+          an explicit sensor/record mapping has been configured — it is never inferred.
+        </p>
+      </div>
+    </section>
+
+    <div class="split-row" id="split-row" hidden>
+      <!-- 2. LEARNING / KNOWLEDGE TRACING -->
+      <section class="panel split-col" id="kt-panel">
+        <div class="section-kicker">Knowledge Tracing</div>
+        <h2>Learning state (BKT)</h2>
+        <p class="muted small-print">
+          Bayesian Knowledge Tracing over real ASSISTments problem attempts — the same
+          model that produces this classroom's priority skill above.
+        </p>
+
+        <div class="stat-row">
+          <div class="stat-tile">
+            <span class="stat-label">Students tracked</span>
+            <span class="stat-value" id="kt-students"></span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-label">Skills observed</span>
+            <span class="stat-value" id="kt-skills"></span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-label">Total attempts</span>
+            <span class="stat-value" id="kt-attempts"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Priority skill</h3>
+          <p id="kt-priority-skill"></p>
+        </div>
+
+        <div class="card">
+          <h3>Mastery by skill</h3>
+          <table>
+            <thead>
+              <tr><th>Skill</th><th>Average mastery</th><th>Observations</th></tr>
+            </thead>
+            <tbody id="kt-mastery-body"></tbody>
+          </table>
+          <p id="kt-mastery-empty" class="muted" hidden>No tracked skills for this classroom yet.</p>
+        </div>
+
+        <details class="research-details">
+          <summary>Research evaluation — BKT experiment results</summary>
+          <p class="muted small-print">
+            Frozen, held-out evaluation from a controlled experiment (student-level
+            train/validation/test split, 11,828 one-step-ahead predictions, 400 test
+            students, 281 skills). This is prediction-quality research evidence, not the
+            live decision support above — see
+            <a href="#architecture-panel">how the Digital Twin works</a> for how they relate.
+            <strong>Log Loss is the primary metric</strong> (proper scoring rule for
+            probabilistic predictions); the others are shown for context.
+          </p>
+          <div class="table-scroll">
+            <table id="research-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Log Loss ↓</th>
+                  <th>Brier</th>
+                  <th>RMSE</th>
+                  <th>Accuracy</th>
+                  <th>ROC-AUC</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted small-print">
+            Student-level bootstrap 95% CI for log-loss improvement over train-fitted BKT:
+            BKT+features (LR) −0.0144 [−0.0190, −0.0098]; historical features (GBM)
+            −0.0190 [−0.0242, −0.0138]. Both intervals exclude zero.
+          </p>
+        </details>
+      </section>
+
+      <!-- 3. STUDENT TWIN -->
+      <section class="panel split-col" id="student-twin-panel">
+        <div class="section-kicker">Student Twin</div>
+        <h2>Student-level perspective (OULAD)</h2>
+        <p class="muted small-print">
+          OULAD is an independent dataset with no shared identifier with ASSISTments —
+          this student is illustrative of the architecture only, not linked to the
+          classroom above.
+        </p>
+
+        <form id="oulad-form" class="selector-form">
+          <label for="oulad-select">Sample OULAD students</label>
+          <select id="oulad-select">
+            <option value="690967|BBB|2014J">690967 — BBB / 2014J</option>
+            <option value="595797|CCC|2014B">595797 — CCC / 2014B</option>
+            <option value="432222|FFF|2013B">432222 — FFF / 2013B</option>
+            <option value="__custom__">Custom id_student…</option>
+          </select>
+          <div id="oulad-custom-fields" hidden>
+            <label for="oulad-id-student">id_student</label>
+            <input type="number" id="oulad-id-student" min="1" />
+            <label for="oulad-code-module">code_module</label>
+            <input type="text" id="oulad-code-module" maxlength="4" placeholder="e.g. BBB" />
+            <label for="oulad-code-presentation">code_presentation</label>
+            <input type="text" id="oulad-code-presentation" maxlength="6" placeholder="e.g. 2013B" />
+          </div>
+          <button type="submit" id="oulad-load-button">Load student</button>
+        </form>
+        <p id="oulad-status" class="status" role="status"></p>
+
+        <div id="oulad-result" hidden>
+          <p class="note note-info small-print" id="oulad-note"></p>
+
+          <div class="card">
+            <h3>Assessment performance</h3>
+            <p id="oulad-assessment-summary"></p>
+          </div>
+
+          <div class="card">
+            <h3>Dropout risk</h3>
+            <p id="oulad-dropout-value" class="stat-value-inline"></p>
+            <p id="oulad-dropout-note" class="muted small-print"></p>
+          </div>
+
+          <div class="card">
+            <h3>Performance prediction</h3>
+            <p id="oulad-performance-value" class="stat-value-inline"></p>
+            <p id="oulad-performance-note" class="muted small-print"></p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 4. SMART CLASSROOM / ENVIRONMENT -->
+    <section class="panel panel-demo panel-demo-primary" id="scenario-panel" hidden>
+      <div class="demo-banner-block">
+        <p class="demo-banner-title" id="scenario-banner"></p>
+        <p class="demo-banner-subtitle" id="scenario-banner-subtitle">
+          Environmental and engagement values shown here are synthetic illustrative
+          data for the selected classroom.
+        </p>
+      </div>
+
+      <h2>Smart Classroom <span class="badge badge-benchmark">Synthetic scenario</span></h2>
+      <p class="muted small-print" id="scenario-note"></p>
+
+      <div class="room-grid">
+        <div class="room-tile">
+          <span class="room-tile-label">Temperature</span>
+          <span class="room-tile-value" id="scenario-temperature"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">Humidity</span>
+          <span class="room-tile-value" id="scenario-humidity"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">CO&#8322;</span>
+          <span class="room-tile-value" id="scenario-co2"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">Occupancy</span>
+          <span class="room-tile-value" id="scenario-occupancy"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">Raised hands</span>
+          <span class="room-tile-value" id="scenario-raised-hands"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">Resources visited</span>
+          <span class="room-tile-value" id="scenario-visited-resources"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">Announcements</span>
+          <span class="room-tile-value" id="scenario-announcements"></span>
+        </div>
+        <div class="room-tile">
+          <span class="room-tile-label">Discussion</span>
+          <span class="room-tile-value" id="scenario-discussion"></span>
+        </div>
+      </div>
+
+      <div class="card absence-risk-card">
+        <h3>Engagement — Absence Risk</h3>
+        <p class="room-tile-value absence-risk-value" id="scenario-absence-risk"></p>
+        <p class="muted small-print">
+          The real, already-trained xAPI absence-risk model's output on this
+          classroom's synthetic engagement values (see scenario note above).
+        </p>
+      </div>
+    </section>
+
+    <!-- 7. DIGITAL TWIN ARCHITECTURE / DATA SOURCES -->
+    <section class="panel" id="architecture-panel">
+      <div class="section-kicker">Architecture</div>
+      <h2>How this Digital Twin works</h2>
+
+      <div class="arch-flow">
+        <div class="arch-box arch-real">ASSISTments</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-real">StudentTwin / BKT</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-real">ClassroomTwin</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-real">Decision Support</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-real">Recommended Learning Resources</div>
+      </div>
+
+      <div class="arch-legend">
+        <div class="arch-legend-row">
+          <span class="arch-dot arch-dot-real"></span>
+          <span><strong>OULAD</strong> → Student-level performance / dropout risk</span>
+        </div>
+        <div class="arch-legend-row">
+          <span class="arch-dot arch-dot-real"></span>
+          <span><strong>CO&#8322; sensors</strong> → Classroom environment (when linked)</span>
+        </div>
+        <div class="arch-legend-row">
+          <span class="arch-dot arch-dot-benchmark"></span>
+          <span><strong>xAPI-Edu-Data</strong> → Benchmark / contextual evidence</span>
+        </div>
+        <div class="arch-legend-row">
+          <span class="arch-dot arch-dot-benchmark"></span>
+          <span><strong>UCI Occupancy</strong> → Benchmark / model validation</span>
+        </div>
+        <div class="arch-legend-row">
+          <span class="arch-dot arch-dot-synthetic"></span>
+          <span><strong>Synthetic scenario</strong> → Demonstration only</span>
+        </div>
+      </div>
+
+      <div class="arch-flow arch-flow-llm">
+        <div class="arch-box arch-real">Real data</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-real">Deterministic analytics / BKT</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-real">Decision support</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box arch-optional">Optional LLM explanation</div>
+      </div>
+      <p class="muted small-print">
+        The LLM never computes mastery or makes the underlying decision — it only
+        explains an already-computed, deterministic result in plain language.
+      </p>
+    </section>
+
+    <!-- 5 & 6. BENCHMARK EVIDENCE (xAPI + UCI Occupancy) -->
+    <section class="panel panel-demo panel-demo-secondary" id="benchmark-panel" hidden>
+      <h3>Benchmark Evidence <span class="badge badge-secondary">real data, not classroom-linked</span></h3>
+      <p class="muted small-print">
+        For reference only — does not produce the synthetic scenario above. Real
+        xAPI-Edu-Data and UCI Occupancy Detection records/models that carry no shared
+        identifier with any ASSISTments classroom, including the one selected above.
+      </p>
+
+      <details>
+        <summary>xAPI-Edu-Data — unlinked benchmark record</summary>
+        <p class="source-line" id="demo-xapi-source-line"></p>
+        <p id="demo-xapi-note" class="muted"></p>
+        <ul id="demo-xapi-signals"></ul>
+      </details>
+
+      <details>
+        <summary>UCI Occupancy Detection — model validation</summary>
+        <p class="muted" id="demo-occupancy-description"></p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Accuracy</th>
+                <th>Precision</th>
+                <th>Recall</th>
+                <th>F1</th>
+                <th>ROC AUC</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Headline (all test rows)</td>
+                <td id="demo-occ-headline-accuracy"></td>
+                <td id="demo-occ-headline-precision"></td>
+                <td id="demo-occ-headline-recall"></td>
+                <td id="demo-occ-headline-f1"></td>
+                <td id="demo-occ-headline-roc-auc"></td>
+              </tr>
+              <tr>
+                <td id="demo-occ-transition-label">Transition events only</td>
+                <td id="demo-occ-transition-accuracy"></td>
+                <td id="demo-occ-transition-precision"></td>
+                <td id="demo-occ-transition-recall"></td>
+                <td id="demo-occ-transition-f1"></td>
+                <td id="demo-occ-transition-roc-auc"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ul id="demo-occupancy-limitations"></ul>
+      </details>
+    </section>
+
+    <section class="panel" id="llm-panel" hidden>
+      <div class="arch-flow arch-flow-inline">
+        <span class="arch-chip">Real data</span>
+        <span class="arch-arrow-inline">→</span>
+        <span class="arch-chip">Deterministic analytics / BKT</span>
+        <span class="arch-arrow-inline">→</span>
+        <span class="arch-chip">Decision support</span>
+        <span class="arch-arrow-inline">→</span>
+        <span class="arch-chip arch-chip-optional">Optional LLM explanation</span>
+      </div>
+      <h2>LLM explanation <span class="badge badge-optional">optional</span></h2>
+      <p class="muted">Generated on demand by calling the Anthropic API, layered on top of
+        the deterministic result above. It does not calculate mastery or make the
+        underlying decision — the deterministic result above is always available and
+        unaffected by this section, including on failure.</p>
+      <button type="button" id="llm-button">Generate LLM explanation</button>
+
+      <div id="llm-loading" class="status" hidden>Requesting explanation from the LLM…</div>
+      <div id="llm-error" class="note note-error" hidden></div>
+
+      <div id="llm-result" hidden>
+        <p class="mode-badge" id="llm-mode"></p>
+        <div class="card">
+          <h3>Summary</h3>
+          <p id="llm-summary"></p>
+        </div>
+        <div class="card">
+          <h3>Reasoning</h3>
+          <p id="llm-reasoning"></p>
+        </div>
+        <div class="card">
+          <h3>Recommended actions</h3>
+          <ul id="llm-actions"></ul>
+        </div>
+        <div class="card">
+          <h3>Evidence used</h3>
+          <ul id="llm-evidence"></ul>
+        </div>
+        <div class="card">
+          <h3>Limitations</h3>
+          <ul id="llm-limitations"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

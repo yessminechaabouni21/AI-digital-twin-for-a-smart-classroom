@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import Engine, bindparam, text
@@ -231,8 +232,38 @@ def fetch_assistments_attempt_sequences(
     return sequences
 
 
+def fetch_assistments_chronological_attempts(
+    engine: Engine, student_ids: Sequence[int]
+) -> dict[int, list[tuple[datetime, str, bool]]]:
+    """Return {student_id: [(start_time, topic_id, correct), ...]}, chronological across ALL skills.
+
+    Unlike `fetch_assistments_attempt_sequences` (which buckets by topic
+    first, discarding each student's true cross-skill attempt order), this
+    keeps every student's full interleaved timeline — needed for
+    `analytics/knowledge_tracing_features.py`'s causal features (e.g. "this
+    student's total attempts so far, across all skills"), which require
+    knowing where an attempt on skill A falls relative to attempts on skill
+    B, not just its position within skill A's own subsequence. Reuses
+    `_BULK_QUERY`, already ordered by `(student_id, start_time)`.
+    """
+    if not student_ids:
+        return {}
+
+    with engine.connect() as conn:
+        rows = conn.execute(_BULK_QUERY, {"student_ids": list(student_ids)}).fetchall()
+
+    attempts: dict[int, list[tuple[datetime, str, bool]]] = {}
+    for student_id, start_time, correct, skills_repr in rows:
+        topic_id = _first_skill(skills_repr)
+        if topic_id is None:
+            continue
+        attempts.setdefault(student_id, []).append((start_time, topic_id, bool(correct)))
+    return attempts
+
+
 __all__ = [
     "fetch_assistments_attempt_sequences",
+    "fetch_assistments_chronological_attempts",
     "fetch_assistments_problem_attempts",
     "fetch_assistments_problems_for_skill",
     "fetch_assistments_student_ids",

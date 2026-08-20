@@ -42,5 +42,8 @@ data/synthetic/*
 .DS_Store
 Thumbs.db
 
+# Local agent instructions
+CLAUDE.md
+
 # Logs
 *.log

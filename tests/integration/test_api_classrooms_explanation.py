@@ -165,6 +165,52 @@ def test_demo_mode_is_threaded_through_and_labeled(client: TestClient) -> None:
     assert provider.received_context.verified_context_signals == []
 
 
+def test_demo_mode_attaches_a_synthetic_scenario_matching_the_dashboard_endpoint(
+    client: TestClient,
+) -> None:
+    """The LLM's synthetic_scenario must be the same data GET /demo/classroom-scenario
+    would show for this class_id, so the dashboard panel and the LLM's narrative never
+    diverge."""
+    provider = _RecordingFakeProvider()
+    app.dependency_overrides[get_explanation_provider] = lambda: provider
+
+    twin_id = derive_classroom_id("assistments", SMALL_COMPLETE_CLASS_ID)
+    client.post(
+        f"/classrooms/{twin_id}/decision-support/explanation",
+        params={"class_id": SMALL_COMPLETE_CLASS_ID, "mode": "demo"},
+    )
+    scenario_response = client.get(
+        "/demo/classroom-scenario", params={"class_id": SMALL_COMPLETE_CLASS_ID}
+    ).json()
+
+    assert provider.received_context is not None
+    synthetic = provider.received_context.synthetic_scenario
+    assert synthetic is not None
+    assert synthetic.environment.provenance == "synthetic_demo"
+    assert synthetic.environment.temperature_c == scenario_response["environment"]["temperature_c"]
+    assert synthetic.environment.co2_ppm == scenario_response["environment"]["co2_ppm"]
+    assert synthetic.engagement.raised_hands == scenario_response["engagement"]["raised_hands"]
+    assert (
+        synthetic.absence_risk.absence_risk_indicator
+        == scenario_response["absence_risk"]["absence_risk_indicator"]
+    )
+
+
+def test_real_mode_never_carries_a_synthetic_scenario(client: TestClient) -> None:
+    provider = _RecordingFakeProvider()
+    app.dependency_overrides[get_explanation_provider] = lambda: provider
+
+    twin_id = derive_classroom_id("assistments", SMALL_COMPLETE_CLASS_ID)
+    client.post(
+        f"/classrooms/{twin_id}/decision-support/explanation",
+        params={"class_id": SMALL_COMPLETE_CLASS_ID},
+    )
+
+    assert provider.received_context is not None
+    assert provider.received_context.mode == "real"
+    assert provider.received_context.synthetic_scenario is None
+
+
 def test_default_mode_is_real(client: TestClient) -> None:
     provider = _RecordingFakeProvider()
     app.dependency_overrides[get_explanation_provider] = lambda: provider

@@ -12,6 +12,20 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class ClassroomResolveOut(BaseModel):
+    """`(source_dataset, class_id) -> twin_id`, via `domain/classroom.py::derive_classroom_id`.
+
+    Pure identity derivation — no DB access, no analytics, no relation to
+    decision-support logic. Exists so a client (e.g. a dashboard) never
+    needs to reimplement `derive_classroom_id`'s uuid5 derivation itself
+    just to know which `twin_id` to call the other endpoints with.
+    """
+
+    twin_id: UUID
+    source_dataset: str
+    class_id: int
+
+
 class ClassroomTwinSummary(BaseModel):
     """Existence + roster provenance for one real ASSISTments classroom's twin.
 
@@ -170,6 +184,7 @@ __all__ = [
     "ClassroomDecisionSupportOut",
     "ClassroomEngagementSummaryOut",
     "ClassroomEnvironmentSummaryOut",
+    "ClassroomResolveOut",
     "ClassroomResourceRecommendationOut",
     "ClassroomTwinStateOut",
     "ClassroomTwinSummary",

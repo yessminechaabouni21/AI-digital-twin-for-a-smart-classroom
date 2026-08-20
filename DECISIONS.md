@@ -18,9 +18,9 @@ strict internal module boundaries (`api/`, `twin_engine/`, `analytics/`,
 **Consequences:** much simpler to build, test, and deploy at this stage; no
 network/serialization overhead between components; module boundaries are
 enforced by convention/review rather than process isolation, so discipline in
-CLAUDE.md matters. Can be split into services later if a specific component
-(e.g., the twin engine) needs independent scaling — the module boundaries are
-drawn so that split stays plausible.
+maintaining those boundaries matters. Can be split into services later if a
+specific component (e.g., the twin engine) needs independent scaling — the
+module boundaries are drawn so that split stays plausible.
 
 ---
 
@@ -232,3 +232,43 @@ neither model is production-ready as-is, and the next real lever is
 feature richness (e.g. `code_module`/`code_presentation`, already flagged
 as a follow-up in dropout-prediction-feature-design.md), not further model
 swapping.
+
+## ADR-010: `GET /students/oulad-demo` only ever serves genuine held-out predictions
+
+**Context:** the dashboard finalization needed a Student Twin panel to
+demonstrate that the architecture supports a student-level perspective
+alongside `ClassroomTwin`, reusing the existing OULAD dropout/performance
+models (`analytics/predictive.py`, `analytics/performance_prediction.py`)
+rather than adding new ML logic. `scripts/student_twin_predictions_oulad_demo.py`
+already showed the intended wiring, but it retrains both models from
+scratch on every run after excluding the one demoed student's row — a
+per-student retrain is the only way that script's approach stays
+leakage-free for an arbitrary student, but running that retrain inside an
+HTTP handler on every request would make the dashboard train models live,
+which the task explicitly ruled out.
+
+**Decision:** train each model exactly once per process, on a fixed
+`train_val_test_split` (same helper `analytics/predictive.py` already
+uses), and cache it (`api/routers/students.py::_get_oulad_dropout_state`/
+`_get_oulad_performance_state`, same lazy-singleton posture
+`api/routers/demo.py` already uses for its own cached models). The
+endpoint then only returns a prediction for a requested
+`(id_student, code_module, code_presentation)` when that row's own index
+falls inside the cached model's *own* held-out test split; otherwise it
+returns `None` with a note explaining that the row was used to fit the
+model and the prediction would be in-sample. This trades "a prediction for
+literally any OULAD student" for "an honest prediction only for students
+the model was never fit on" — consistent with this project's broader
+stance (see the frozen BKT knowledge-tracing experiment) that a dashboard
+should never present an in-sample number as if it were held-out.
+
+**Consequences:** the dashboard's OULAD student selector is necessarily
+scoped to students who fall in both models' test splits (verified
+directly against the live database rather than assumed — see
+`DEFAULT_OULAD_ID_STUDENT` and the dashboard's sample dropdown); an
+arbitrary custom `id_student` typed into the dashboard may legitimately
+come back with `dropout_risk`/`performance_prediction` both `None` and an
+explanatory note, which is correct behavior, not a bug. First request
+after process start pays the one-time model-fit cost (~20-30s for both
+models against the full OULAD snapshot); every request after that is
+cache-only.

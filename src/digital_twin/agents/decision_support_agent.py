@@ -42,8 +42,24 @@ convention:
                                    never generates synthetic data itself — `mode`
                                    only changes labeling of whatever
                                    `ClassroomDecisionSupport` the caller already
-                                   built; a synthetic-signal generator, if ever
-                                   added, is a separate, later concern.
+                                   built. `LLMDecisionContext.synthetic_scenario`
+                                   (a `SyntheticScenarioSummary`, always `None` in
+                                   real mode — see `build_llm_decision_context`'s
+                                   docstring) carries a fabricated
+                                   `provenance="synthetic_demo"` Smart-Classroom
+                                   scenario from `analytics/synthetic_context.py`,
+                                   never generated here, and structurally distinct
+                                   from category B: it is deliberately classroom-
+                                   scoped (the demo narrative) and never confusable
+                                   with `verified_context_signals`. Its `environment`/
+                                   `engagement` are entirely fabricated; its
+                                   `absence_risk` is subtler — a REAL prediction from
+                                   the real, already-trained xAPI absence-risk model
+                                   (`model_provenance="real_xapi_trained_model"`) run
+                                   on that fabricated engagement input
+                                   (`input_provenance="synthetic_demo"`) — see
+                                   `SyntheticAbsenceRiskIndicator`'s own docstring for
+                                   why both facts must be surfaced together.
 
 Missing context is represented explicitly (`unavailable_context: list[str]`),
 never filled with a guess — see `build_llm_decision_context`'s docstring.
@@ -56,11 +72,16 @@ from typing import Any, Literal, Protocol, cast
 from uuid import UUID
 
 from anthropic import Anthropic, AnthropicError
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from digital_twin.analytics.decision_support import (
     NON_CAUSAL_DISCLAIMER,
     ClassroomDecisionSupport,
+)
+from digital_twin.analytics.synthetic_context import (
+    SyntheticAbsenceRiskIndicator,
+    SyntheticClassroomEnvironment,
+    SyntheticEngagement,
 )
 from digital_twin.config import get_settings
 
@@ -126,6 +147,23 @@ class ContextSignalSummary(BaseModel):
     provenance: Literal["benchmark_research"] = "benchmark_research"
 
 
+class SyntheticScenarioSummary(BaseModel):
+    """A fabricated, illustrative Smart-Classroom scenario, carried through unmodified
+    from `analytics/synthetic_context.py`.
+
+    Deliberately a separate type from `ContextSignalSummary`/
+    `verified_context_signals`: that category is real benchmark/research data
+    with no classroom identity; this category is synthetic data deliberately
+    scoped to the classroom being demonstrated. `build_llm_decision_context`
+    never generates this data itself — see its docstring — and this field is
+    only ever non-`None` when `mode == "demo"`.
+    """
+
+    environment: SyntheticClassroomEnvironment
+    engagement: SyntheticEngagement
+    absence_risk: SyntheticAbsenceRiskIndicator
+
+
 class LLMDecisionContext(BaseModel):
     """Structured, provenance-aware input to the LLM explanation layer.
 
@@ -143,6 +181,14 @@ class LLMDecisionContext(BaseModel):
     verified_context_signals: list[ContextSignalSummary]
     unavailable_context: list[str]
     provenance_notes: list[str]
+    synthetic_scenario: SyntheticScenarioSummary | None = Field(
+        default=None,
+        description=(
+            "A fabricated, provenance='synthetic_demo' Smart-Classroom scenario. "
+            "Always None when mode='real' — build_llm_decision_context raises if a "
+            "caller ever supplies one alongside mode='real'."
+        ),
+    )
 
 
 class LLMDecisionExplanation(BaseModel):
@@ -171,6 +217,7 @@ def build_llm_decision_context(
     decision_support: ClassroomDecisionSupport,
     *,
     mode: DataMode = "real",
+    synthetic_scenario: SyntheticScenarioSummary | None = None,
 ) -> LLMDecisionContext:
     """Build the LLM's entire input from an already-computed ClassroomDecisionSupport.
 
@@ -184,7 +231,17 @@ def build_llm_decision_context(
     classroom with no configured `classroom_context_mappings` row, e.g.
     class_id=1679 today), `verified_context_signals` here is empty too, and
     every known context category ends up in `unavailable_context` instead.
+
+    `synthetic_scenario`, if supplied, is carried through completely
+    unmodified onto `LLMDecisionContext.synthetic_scenario` — this function
+    never generates it itself (see `analytics/synthetic_context.py` for the
+    only place that happens). Passing it together with `mode="real"` raises
+    `ValueError`: real mode must never carry fabricated data into the LLM's
+    context, so this is enforced here rather than trusted to every caller.
     """
+    if mode == "real" and synthetic_scenario is not None:
+        raise ValueError("synthetic_scenario must never be supplied when mode='real'.")
+
     verified_signals = [
         ContextSignalSummary(
             source_dataset=signal.source_dataset,
@@ -227,6 +284,7 @@ def build_llm_decision_context(
         verified_context_signals=verified_signals,
         unavailable_context=unavailable_context,
         provenance_notes=provenance_notes,
+        synthetic_scenario=synthetic_scenario,
     )
 
 
@@ -348,5 +406,6 @@ __all__ = [
     "LLMDecisionExplanation",
     "LearningStateSummary",
     "RecommendedResourceSummary",
+    "SyntheticScenarioSummary",
     "build_llm_decision_context",
 ]

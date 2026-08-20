@@ -10,7 +10,7 @@ earlier ones (domain models, twin engine) being stable.
 **Goal:** a professional, navigable project skeleton before any logic is written.
 
 - Deliverables: directory structure, README, CLAUDE.md, PROJECT_PLAN.md,
-  TODO.md, DECISIONS.md, CHANGELOG.md, requirements.txt, pyproject.toml,
+  DECISIONS.md, CHANGELOG.md, requirements.txt, pyproject.toml,
   .gitignore, .env.example, git repository initialized.
 - Exit criteria: repo clones clean, `pip install -e ".[dev]"` succeeds,
   structure matches README.

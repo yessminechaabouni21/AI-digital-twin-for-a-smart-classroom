@@ -1,0 +1,605 @@
+:root {
+  --bg: #f5f6f8;
+  --panel-bg: #ffffff;
+  --card-bg: #fafbfc;
+  --border: #e0e3e8;
+  --text: #1c2126;
+  --text-muted: #5b6470;
+  --accent: #2b5fd9;
+  --accent-contrast: #ffffff;
+  --info-bg: #eef4ff;
+  --info-border: #b9cdfb;
+  --warning-bg: #fff7e6;
+  --warning-border: #f3d68a;
+  --error-bg: #fdecec;
+  --error-border: #f3b4b4;
+  --error-text: #8a1f1f;
+  --radius: 8px;
+  --demo-bg: #fbf1ff;
+  --demo-border: #b35bd6;
+  --demo-text: #5a1a75;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app-header {
+  padding: 24px 32px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+main {
+  max-width: 880px;
+  margin: 24px auto;
+  padding: 0 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+
+.card:last-child {
+  margin-bottom: 0;
+}
+
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.selector-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.selector-form label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+select,
+input[type="number"] {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  min-width: 260px;
+}
+
+button {
+  padding: 9px 18px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.source-line {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: -6px;
+}
+
+.rationale {
+  color: var(--text-muted);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+li {
+  margin-bottom: 4px;
+}
+
+.note {
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  margin: 0 0 10px;
+}
+
+.note-info {
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+}
+
+.note-warning {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+}
+
+.note-error {
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.badge-optional {
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--accent);
+}
+
+.mode-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  margin-bottom: 12px;
+}
+
+.demo-toggle-label {
+  display: block;
+  margin-top: 14px;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.demo-toggle-label input {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.panel-demo {
+  border: 2px solid var(--demo-border);
+  background: var(--demo-bg);
+}
+
+.demo-banner {
+  display: inline-block;
+  background: var(--demo-border);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  padding: 8px 14px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+
+.badge-benchmark {
+  background: var(--demo-bg);
+  border: 1px solid var(--demo-border);
+  color: var(--demo-text);
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.panel-demo .card {
+  border-color: var(--demo-border);
+}
+
+.panel-demo-primary {
+  padding: 24px 28px;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.room-tile {
+  background: var(--panel-bg);
+  border: 1px solid var(--demo-border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.room-tile-wide {
+  grid-column: 1 / -1;
+}
+
+.room-tile-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.room-tile-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--demo-text);
+}
+
+.small-print {
+  font-size: 0.8rem;
+}
+
+.absence-risk-card {
+  margin-top: 16px;
+  border-color: var(--demo-border);
+}
+
+.absence-risk-card h3 {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.absence-risk-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--demo-text);
+  margin: 6px 0;
+}
+
+.panel-demo-secondary {
+  padding: 14px 20px;
+  background: var(--panel-bg);
+  border: 1px dashed var(--demo-border);
+  opacity: 0.9;
+}
+
+.panel-demo-secondary h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.badge-secondary {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.panel-demo-secondary details {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.panel-demo-secondary summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.panel-demo-secondary table {
+  margin-top: 10px;
+}
+
+/* Section hierarchy ------------------------------------------------- */
+
+.section-kicker {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+/* Knowledge Tracing / Student Twin split row ------------------------- */
+
+.split-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.split-row[hidden] {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .split-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.split-col {
+  margin: 0;
+  min-width: 0;
+}
+
+.stat-row {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+
+.stat-tile {
+  flex: 1 1 100px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.stat-value-inline {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.research-details {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  background: var(--card-bg);
+}
+
+.research-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.research-details table {
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+
+.research-best-row {
+  background: var(--info-bg);
+}
+
+/* Smart Classroom demonstration banner ------------------------------- */
+
+.demo-banner-block {
+  margin-bottom: 14px;
+}
+
+.demo-banner-title {
+  display: inline-block;
+  background: var(--demo-border);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border-radius: 6px;
+  margin: 0 0 6px;
+}
+
+.demo-banner-subtitle {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--demo-text);
+}
+
+/* Architecture diagram ------------------------------------------------ */
+
+.arch-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 16px auto;
+  max-width: 420px;
+}
+
+.arch-box {
+  width: 100%;
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.arch-real {
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--text);
+}
+
+.arch-optional {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--text);
+}
+
+.arch-arrow {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.arch-flow-llm {
+  margin-top: 20px;
+}
+
+.arch-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 480px;
+  margin: 18px auto;
+  font-size: 0.9rem;
+}
+
+.arch-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arch-dot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.arch-dot-real {
+  background: var(--accent);
+}
+
+.arch-dot-benchmark {
+  background: var(--demo-border);
+}
+
+.arch-dot-synthetic {
+  background: var(--text-muted);
+}
+
+.arch-flow-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.arch-chip {
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.arch-chip-optional {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+}
+
+.arch-arrow-inline {
+  color: var(--text-muted);
+}

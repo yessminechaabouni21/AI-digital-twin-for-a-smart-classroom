@@ -152,3 +152,87 @@ def test_get_student_twin_returns_404_after_cleanup_empty_state(
     response = client.get(f"/students/{student.student_id}")
 
     assert response.status_code == 404
+
+
+# GET /students/oulad-demo -- real OULAD data, independent of ASSISTments identity.
+# id_student=690967 (BBB/2014J) and id_student=441201 (DDD/2013B) are both real,
+# verified-in-the-live-database values: the former falls in both the dropout and
+# performance models' own held-out test splits (see the endpoint's own docstring
+# for why that matters), the latter does not.
+_OULAD_HELD_OUT_STUDENT = (690967, "BBB", "2014J")
+_OULAD_TRAIN_SPLIT_STUDENT = (441201, "DDD", "2013B")
+
+
+def test_get_oulad_student_demo_is_not_swallowed_by_the_twin_id_route(
+    engine: Engine, client: TestClient
+) -> None:
+    """`/oulad-demo` must be registered before `/{twin_id}` -- otherwise FastAPI would
+    try to parse "oulad-demo" as a UUID and reject it with 422 before this handler runs."""
+    response = client.get("/students/oulad-demo")
+
+    assert response.status_code == 200
+
+
+def test_get_oulad_student_demo_returns_genuine_held_out_predictions(
+    engine: Engine, client: TestClient
+) -> None:
+    id_student, code_module, code_presentation = _OULAD_HELD_OUT_STUDENT
+
+    response = client.get(
+        "/students/oulad-demo",
+        params={
+            "id_student": id_student,
+            "code_module": code_module,
+            "code_presentation": code_presentation,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id_student"] == id_student
+    assert "OULAD has no shared identifier with ASSISTments" in body["note"]
+    assert body["dropout_risk"] is not None
+    assert 0.0 <= body["dropout_risk"]["dropout_probability"] <= 1.0
+    assert "held-out" in body["dropout_risk_note"].lower()
+    assert body["performance_prediction"] is not None
+    assert 0.0 <= body["performance_prediction"]["pass_probability"] <= 1.0
+    assert "held-out" in body["performance_prediction_note"].lower()
+
+
+def test_get_oulad_student_demo_withholds_in_sample_predictions(
+    engine: Engine, client: TestClient
+) -> None:
+    """A student whose own row was used to fit the cached model must never be served
+    a prediction for it -- that would be in-sample, not a genuine held-out one."""
+    id_student, code_module, code_presentation = _OULAD_TRAIN_SPLIT_STUDENT
+
+    response = client.get(
+        "/students/oulad-demo",
+        params={
+            "id_student": id_student,
+            "code_module": code_module,
+            "code_presentation": code_presentation,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dropout_risk"] is None
+    assert "used to fit" in body["dropout_risk_note"]
+    assert body["performance_prediction"] is None
+    assert "used to fit" in body["performance_prediction_note"]
+
+
+def test_get_oulad_student_demo_handles_unknown_student_gracefully(
+    engine: Engine, client: TestClient
+) -> None:
+    response = client.get(
+        "/students/oulad-demo",
+        params={"id_student": 999999999, "code_module": "ZZZ", "code_presentation": "0000Z"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dropout_risk"] is None
+    assert body["performance_prediction"] is None
+    assert body["assessment_performance"]["total_results"] == 0

@@ -87,6 +87,32 @@ class StudentPerformancePredictionOut(BaseModel):
     predicted_class: int
 
 
+class OuladStudentDemoOut(BaseModel):
+    """One OULAD student's real assessment/dropout/performance summary — a StudentTwin
+    perspective built from OULAD data, entirely independent of ASSISTments identity.
+
+    `dropout_risk`/`performance_prediction` are only ever populated from a
+    model's own genuine held-out test split (see
+    `api/routers/students.py::get_oulad_student_demo`) — never from a model
+    that was fit on this same student's row, and never retrained per
+    request (both models are trained once per process and cached, the same
+    posture `api/routers/demo.py` already uses for its own cached models).
+    `*_note` explains which case applied. `id_student` is OULAD's own
+    dataset-scoped identifier (see domain/student.py::Student's docstring)
+    — it is never joined or compared to any ASSISTments student_id.
+    """
+
+    id_student: int
+    code_module: str
+    code_presentation: str
+    note: str
+    assessment_performance: AssessmentPerformanceSummaryOut
+    dropout_risk: DropoutPredictionOut | None
+    dropout_risk_note: str
+    performance_prediction: StudentPerformancePredictionOut | None
+    performance_prediction_note: str
+
+
 class StudentTwinStateOut(BaseModel):
     """Full derived StudentTwinState for one student twin.
 
@@ -114,6 +140,7 @@ __all__ = [
     "DropoutPredictionOut",
     "EngagementSummaryOut",
     "KnowledgeStateOut",
+    "OuladStudentDemoOut",
     "StudentPerformancePredictionOut",
     "StudentTwinStateOut",
     "StudentTwinSummary",
